@@ -5,6 +5,7 @@ import PQueue from "p-queue"; // バッチ処理のために追加
 
 // バッチ操作のインターフェース（mendableai/firecrawl-mcp-serverから参照）
 // Define the options schema separately for clarity and type inference
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const BATCH_SCRAPE_OPTIONS_SCHEMA = z
   .object({
     formats: z

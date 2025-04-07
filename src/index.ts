@@ -39,6 +39,7 @@ app.get("/sse", async (_req: Request, res: Response) => {
     });
 
     await server.connect(transport);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (_) {
     if (!res.writableEnded) {
       res.end();
@@ -54,7 +55,8 @@ app.post("/messages", async (req: Request, res: Response) => {
   if (transport) {
     try {
       await transport.handlePostMessage(req, res);
-    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_) {
       if (!res.headersSent) {
         res.status(500).json({
           success: false,

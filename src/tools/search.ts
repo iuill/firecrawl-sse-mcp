@@ -149,7 +149,7 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
       .optional()
       .describe("System prompt for LLM extraction"),
     schema: z
-      .any()
+      .record(z.string(), z.unknown()) // Use unknown instead of any for better type safety
       .optional()
       .describe("JSON schema for structured data extraction"), // Use z.any() for flexibility
     allowExternalLinks: z
@@ -183,8 +183,16 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
 
         if (!("success" in extractResponse) || !extractResponse.success) {
           // Handle potential error structure difference if needed
-          const errorMsg =
-            (extractResponse as any)?.error || "Extraction failed";
+          let errorMsg = "Extraction failed";
+          const unknownResponse = extractResponse as unknown; // Cast to unknown for safe access
+          if (
+            unknownResponse &&
+            typeof unknownResponse === "object" &&
+            "error" in unknownResponse &&
+            typeof unknownResponse.error === "string"
+          ) {
+            errorMsg = unknownResponse.error;
+          }
           throw new Error(errorMsg);
         }
 
@@ -240,6 +248,7 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
         // Assuming it exists and matches the schema for now
         // Need to verify the actual method signature in firecrawl-js
         // Using 'any' cast as a temporary workaround if the method is not typed
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const response = await (client as any).deepResearch(
           query,
           {
@@ -247,9 +256,11 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
             // origin: "mcp-server", // Remove origin if not supported
           } as DeepResearchParams, // Cast options
           // Add callbacks if supported by the actual method
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (activity: any) => {
             console.log(`Research activity: ${activity.message}`);
           },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (source: any) => {
             console.log(`Research source: ${source.url}`);
           }
@@ -324,6 +335,7 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
         // Assuming it exists and matches the schema for now
         // Need to verify the actual method signature in firecrawl-js
         // Using 'any' cast as a temporary workaround if the method is not typed
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const response = await (client as any).generateLLMsText(url, {
           ...params,
           // origin: "mcp-server", // Remove origin if not supported
