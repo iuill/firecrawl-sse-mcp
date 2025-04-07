@@ -2,31 +2,17 @@
 
 import express, { Request, Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import dotenv from "dotenv";
 import cors from "cors";
-import { safeLog } from "./tools/utils.js";
-import { checkApiKeyRequirement } from "./tools/client.js";
-import { registerScrapeHandler } from "./tools/scrape.js";
-import { registerMapHandler } from "./tools/map.js";
-import { registerCrawlHandler } from "./tools/crawl.js";
-import { registerBatchHandlers } from "./tools/batch.js";
-import { registerCrawlStatusHandler } from "./tools/crawlStatus.js";
-import { registerSearchHandler } from "./tools/search.js";
-import { registerExtractHandler } from "./tools/extract.js";
-import { registerDeepResearchHandler } from "./tools/deepResearch.js";
-import { registerGenerateLLMsTxtHandler } from "./tools/llmsTxt.js";
-
+import { registerAllTools } from "./tools/index.js"; // Import tool registration function
 // 環境変数の読み込み
 dotenv.config();
 
 // 環境変数の設定
 const PORT = process.env.FIRECRAWL_PORT || 3006;
 const FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL;
-
-// --- APIキーのチェック ---
-checkApiKeyRequirement();
+const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 
 // --- MCPサーバーの設定 ---
 const server = new McpServer({
@@ -48,23 +34,14 @@ app.get("/sse", async (_req: Request, res: Response) => {
     const transport = new SSEServerTransport("/messages", res);
     transports[transport.sessionId] = transport;
 
-    safeLog("info", `New SSE connection established: ${transport.sessionId}`);
-
     res.on("close", () => {
-      safeLog("info", `SSE connection closed: ${transport.sessionId}`);
       delete transports[transport.sessionId];
     });
 
     await server.connect(transport);
-    safeLog("info", `Transport connected for session: ${transport.sessionId}`);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    safeLog("error", `Failed to connect transport: ${message}`);
+  } catch (_) {
     if (!res.writableEnded) {
       res.end();
-    }
-    if (error instanceof Error && error.stack) {
-      safeLog("error", `Stack trace: ${error.stack}`);
     }
   }
 });
@@ -78,11 +55,6 @@ app.post("/messages", async (req: Request, res: Response) => {
     try {
       await transport.handlePostMessage(req, res);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      safeLog(
-        "error",
-        `Error handling message for session ${sessionId}: ${message}`
-      );
       if (!res.headersSent) {
         res.status(500).json({
           success: false,
@@ -91,12 +63,8 @@ app.post("/messages", async (req: Request, res: Response) => {
       } else if (!res.writableEnded) {
         res.end();
       }
-      if (error instanceof Error && error.stack) {
-        safeLog("error", `Stack trace: ${error.stack}`);
-      }
     }
   } else {
-    safeLog("warning", `No active transport found for sessionId: ${sessionId}`);
     res.status(404).json({
       success: false,
       error: { message: "No active session found for sessionId" },
@@ -109,33 +77,27 @@ app.get("/health", (_req: Request, res: Response) => {
   res.status(200).send("OK");
 });
 
-// --- ツールの登録 ---
-// 各ツールのハンドラーを登録
-// McpServerをServerにキャストして型の問題を解決
-const serverAsServer = server as unknown as Server;
-registerScrapeHandler(serverAsServer);
-registerMapHandler(serverAsServer);
-registerCrawlHandler(serverAsServer);
-registerBatchHandlers(serverAsServer);
-registerCrawlStatusHandler(serverAsServer);
-registerSearchHandler(serverAsServer);
-registerExtractHandler(serverAsServer);
-registerDeepResearchHandler(serverAsServer);
-registerGenerateLLMsTxtHandler(serverAsServer);
-
 // --- サーバー起動 ---
 async function initializeServer() {
   try {
+    // Check for required API key
+    if (!FIRECRAWL_API_KEY) {
+      console.error(
+        "Error: FIRECRAWL_API_KEY environment variable is required."
+      );
+      process.exit(1);
+    }
+
+    // Register tools
+    console.log("Registering Firecrawl tools...");
+    registerAllTools(server, FIRECRAWL_API_KEY, FIRECRAWL_API_URL);
+    console.log("Firecrawl tools registered.");
+
+    // Start the Express server
     app.listen(PORT, () => {
       console.log(`Firecrawl MCP Server running on http://localhost:${PORT}`);
       console.log(`SSE endpoint: http://localhost:${PORT}/sse`);
       console.log(`Message endpoint: http://localhost:${PORT}/messages`);
-      safeLog("info", "Firecrawl MCP Server initialized successfully");
-      safeLog(
-        "info",
-        `Configuration: API URL: ${FIRECRAWL_API_URL || "default (Cloud)"}`
-      );
-      safeLog("info", `Server version: 1.0.0`); // 直接バージョン情報を指定
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -155,15 +117,4 @@ initializeServer().catch((error) => {
     console.error(`Stack trace: ${error.stack}`);
   }
   process.exit(1);
-});
-
-// Graceful shutdown handling
-process.on("SIGINT", () => {
-  safeLog("info", "SIGINT received, shutting down server...");
-  process.exit(0);
-});
-
-process.on("SIGTERM", () => {
-  safeLog("info", "SIGTERM received, shutting down server...");
-  process.exit(0);
 });
