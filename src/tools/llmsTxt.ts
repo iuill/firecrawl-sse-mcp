@@ -140,12 +140,16 @@ export function registerGenerateLLMsTxtHandler(server: Server) {
         );
 
         // Prepare parameters for client.generateLLMsText
-        const params: GenerateLLMsTextParams = {
+        // GenerateLLMsTextParamsを拡張した型を作成
+        type ExtendedGenerateLLMsTextParams = GenerateLLMsTextParams & {
+          __experimental_stream?: boolean;
+        };
+
+        const params: ExtendedGenerateLLMsTextParams = {
           maxUrls: options.maxUrls,
           showFullText: options.showFullText,
-          // origin: 'mcp-server', // Keep origin commented out or handle if needed
           origin: "mcp-server",
-          // Include __experimental_stream if needed by the client method
+          __experimental_stream: false, // 明示的にストリーム処理を無効化
         };
 
         // Assuming client.generateLLMsText exists and works as in the reference repo

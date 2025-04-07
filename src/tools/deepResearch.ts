@@ -121,6 +121,15 @@ export function registerDeepResearchHandler(server: Server) {
           `Starting ${context} with options: ${JSON.stringify(options)}`
         );
 
+        // DeepResearchOptionsを拡張した型を作成
+        type ExtendedDeepResearchOptions = {
+          maxDepth?: number;
+          timeLimit?: number;
+          maxUrls?: number;
+          origin: string;
+          __experimental_stream: boolean;
+        };
+
         // Assuming client.deepResearch exists and works as in the reference repo
         // Including activity and source callbacks
         const response = await withRetry(
@@ -131,9 +140,9 @@ export function registerDeepResearchHandler(server: Server) {
                 maxDepth: options.maxDepth,
                 timeLimit: options.timeLimit,
                 maxUrls: options.maxUrls,
-                // @ts-expect-error Extended API options including origin
                 origin: "mcp-server",
-              },
+                __experimental_stream: false, // 明示的にストリーム処理を無効化
+              } as ExtendedDeepResearchOptions,
               // Activity callback
               (activity) => {
                 safeLog(

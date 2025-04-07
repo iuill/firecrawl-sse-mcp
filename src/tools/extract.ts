@@ -154,15 +154,20 @@ export function registerExtractHandler(server: Server) {
         );
 
         // Prepare parameters for client.extract
-        const params: ExtractParams = {
+        // ExtractParamsを拡張した型を作成
+        type ExtendedExtractParams = ExtractParams & {
+          __experimental_stream?: boolean;
+        };
+
+        const params: ExtendedExtractParams = {
           prompt: args.prompt,
           systemPrompt: args.systemPrompt,
           schema: args.schema,
           allowExternalLinks: args.allowExternalLinks,
           enableWebSearch: args.enableWebSearch,
           includeSubdomains: args.includeSubdomains,
-          // origin: 'mcp-server', // Keep origin commented out or handle if needed
           origin: "mcp-server",
+          __experimental_stream: false, // 明示的にストリーム処理を無効化
         };
 
         // Assuming client.extract exists and works as in the reference repo
