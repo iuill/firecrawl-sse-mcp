@@ -4,7 +4,6 @@ import express, { Request, Response } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import dotenv from "dotenv";
-import cors from "cors";
 import { registerAllTools } from "./tools/index.js"; // Import tool registration function
 // 環境変数の読み込み
 dotenv.config();
@@ -22,8 +21,6 @@ const server = new McpServer({
 
 // --- Expressアプリケーションの設定 ---
 const app = express();
-app.use(cors());
-app.use(express.json());
 
 // セッション管理のためのマップ
 const transports: { [sessionId: string]: SSEServerTransport } = {};
@@ -34,15 +31,26 @@ app.get("/sse", async (_req: Request, res: Response) => {
     const transport = new SSEServerTransport("/messages", res);
     transports[transport.sessionId] = transport;
 
+    console.log(`SSE接続確立: sessionId=${transport.sessionId}`);
+
     res.on("close", () => {
+      console.log(`SSE接続終了: sessionId=${transport.sessionId}`);
       delete transports[transport.sessionId];
     });
 
     await server.connect(transport);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (_) {
-    if (!res.writableEnded) {
-      res.end();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("SSE接続確立エラー:", message);
+    if (error instanceof Error && error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
+    // レスポンスがまだ送信されていない場合のみエラーレスポンスを送信
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        error: { message: "Failed to establish SSE connection" },
+      });
     }
   }
 });
@@ -55,28 +63,26 @@ app.post("/messages", async (req: Request, res: Response) => {
   if (transport) {
     try {
       await transport.handlePostMessage(req, res);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (_) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("メッセージ処理エラー:", message);
+      if (error instanceof Error && error.stack) {
+        console.error("Stack trace:", error.stack);
+      }
+      // レスポンスがまだ送信されていない場合のみエラーレスポンスを送信
       if (!res.headersSent) {
         res.status(500).json({
           success: false,
           error: { message: "Error processing message" },
         });
-      } else if (!res.writableEnded) {
-        res.end();
       }
     }
   } else {
-    res.status(404).json({
+    res.status(400).json({
       success: false,
-      error: { message: "No active session found for sessionId" },
+      error: { message: "No transport found for sessionId" },
     });
   }
-});
-
-// --- ヘルスチェックエンドポイント (/health) ---
-app.get("/health", (_req: Request, res: Response) => {
-  res.status(200).send("OK");
 });
 
 // --- サーバー起動 ---
