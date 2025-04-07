@@ -12,7 +12,7 @@ import { allTools, registerAllToolHandlers } from "./tools/index.js"; // Import 
 dotenv.config();
 
 // 環境変数の設定 (client.ts でも読み込まれるが、ポート番号はこちらで必要)
-const PORT = process.env.FIRECRAWL_PORT || 3000;
+const PORT = process.env.FIRECRAWL_PORT || 3006;
 const FIRECRAWL_API_URL = process.env.FIRECRAWL_API_URL; // For logging purposes
 
 // --- APIキーのチェック ---
