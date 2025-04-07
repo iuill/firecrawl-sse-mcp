@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -108,7 +107,7 @@ export const CRAWL_TOOL: Tool = {
     },
     required: ["url"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Type guard for crawl arguments

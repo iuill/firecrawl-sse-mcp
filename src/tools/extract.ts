@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -55,7 +54,7 @@ export const EXTRACT_TOOL: Tool = {
     },
     required: ["urls"], // Only URLs are strictly required by the tool definition
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Type guard for extract arguments
@@ -179,11 +178,23 @@ export function registerExtractHandler(server: Server) {
 
         // Type guard for successful response (adjust based on actual API response structure)
         // The reference repo uses a generic ExtractResponse<T>, assuming 'success' property exists.
-        if (!("success" in extractResponse) || !extractResponse.success) {
-          throw new Error(
-            (extractResponse as any).error ||
-              "Extraction failed with no specific error message"
-          );
+        // Define a type for the expected error response structure
+        interface ErrorResponse {
+          success: false;
+          error?: string;
+        }
+        if (
+          !(
+            typeof extractResponse === "object" &&
+            extractResponse !== null &&
+            "success" in extractResponse &&
+            extractResponse.success
+          )
+        ) {
+          const errorMsg =
+            (extractResponse as ErrorResponse)?.error ||
+            "Extraction failed with no specific error message";
+          throw new Error(errorMsg);
         }
 
         const response = extractResponse as ExtractResponse; // Cast to expected successful response type

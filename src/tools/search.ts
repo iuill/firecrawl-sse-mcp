@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -78,7 +77,7 @@ export const SEARCH_TOOL: Tool = {
     },
     required: ["query"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Define SearchOptions locally based on the inputSchema
@@ -205,10 +204,20 @@ export function registerSearchHandler(server: Server) {
           creditsUsed = response.creditsUsed;
         }
 
+        // Define a type for the search result item
+        interface SearchResultItem {
+          url: string;
+          title?: string;
+          description?: string;
+          markdown?: string;
+          html?: string;
+          rawHtml?: string;
+          // Add other potential fields if known
+        }
+
         // Format the results
-        const results = response.data
-          .map((result: any) => {
-            // Use 'any' for result type flexibility from API
+        const results = (response.data as SearchResultItem[]) // Assert the type of response.data
+          .map((result: SearchResultItem) => {
             let resultString = `URL: ${result.url}\nTitle: ${result.title || "No title"}\nDescription: ${result.description || "No description"}`;
             // Include scraped content if available (markdown is preferred if present)
             if (result.markdown) {

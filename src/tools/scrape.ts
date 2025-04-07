@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema, // Changed from ToolInputSchema
   CallToolRequestSchema,
   CallToolResultSchema, // Changed from CallToolResponseSchema
 } from "@modelcontextprotocol/sdk/types.js";
@@ -168,7 +167,7 @@ export const SCRAPE_TOOL: Tool = {
     required: ["url"],
   }, // Removed 'as ToolSchema' cast
   // Output schema based on CallToolResultSchema
-  outputSchema: CallToolResultSchema as any, // Keep cast for outputSchema for now
+  outputSchema: CallToolResultSchema,
 };
 
 // Type guard for scrape arguments

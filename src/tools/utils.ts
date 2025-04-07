@@ -28,7 +28,7 @@ export function safeLog(
     | "critical"
     | "alert"
     | "emergency",
-  data: any
+  data: unknown
 ): void {
   const timestamp = new Date().toISOString();
   console.error(
@@ -46,12 +46,21 @@ export async function withRetry<T>(
 ): Promise<T> {
   try {
     return await operation();
-  } catch (error) {
+  } catch (error: unknown) {
+    // Catch error as unknown
+    // Define a type for potential Axios-like errors
+    interface AxiosError {
+      response?: {
+        status?: number;
+      };
+    }
     const isRateLimit =
-      error instanceof Error &&
-      (error.message.includes("rate limit") ||
-        error.message.includes("429") ||
-        (error as any)?.response?.status === 429); // axiosのエラーも考慮
+      (error instanceof Error &&
+        (error.message.includes("rate limit") ||
+          error.message.includes("429"))) ||
+      (typeof error === "object" &&
+        error !== null &&
+        (error as AxiosError).response?.status === 429); // Check Axios-like error structure
 
     if (isRateLimit && attempt < CONFIG.retry.maxAttempts) {
       const delayMs = Math.min(
@@ -103,7 +112,9 @@ export async function updateCreditUsage(creditsUsed: number): Promise<void> {
 }
 
 // ユーティリティ関数: レスポンスにクレジット情報が含まれるかチェック
-export function hasCredits(response: any): response is { creditsUsed: number } {
+export function hasCredits(
+  response: unknown
+): response is { creditsUsed: number } {
   return (
     typeof response === "object" &&
     response !== null &&

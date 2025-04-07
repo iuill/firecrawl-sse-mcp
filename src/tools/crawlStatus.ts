@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -26,7 +25,7 @@ export const CHECK_CRAWL_STATUS_TOOL: Tool = {
     },
     required: ["id"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Type guard for status check arguments

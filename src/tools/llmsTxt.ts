@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -33,7 +32,7 @@ export const GENERATE_LLMSTXT_TOOL: Tool = {
     },
     required: ["url"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Define local interfaces based on reference repo comments if not exported by library

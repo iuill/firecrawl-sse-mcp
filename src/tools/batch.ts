@@ -1,6 +1,5 @@
 import {
   Tool,
-  ToolSchema,
   CallToolRequestSchema,
   CallToolResultSchema,
 } from "@modelcontextprotocol/sdk/types.js";
@@ -60,7 +59,7 @@ export const BATCH_SCRAPE_TOOL: Tool = {
     },
     required: ["urls"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // Tool definition for checking batch status
@@ -74,7 +73,7 @@ export const CHECK_BATCH_STATUS_TOOL: Tool = {
     },
     required: ["id"],
   }, // Removed 'as ToolSchema' cast
-  outputSchema: CallToolResultSchema as any,
+  outputSchema: CallToolResultSchema,
 };
 
 // --- Batch Processing Logic ---
@@ -87,13 +86,13 @@ interface BatchScrapeOptions {
 interface QueuedBatchOperation {
   id: string;
   urls: string[];
-  options?: any; // Store the options passed in
+  options?: Omit<ScrapeParams, "url">; // Use Omit<ScrapeParams, "url"> for options
   status: "pending" | "processing" | "completed" | "failed";
   progress: {
     completed: number; // Number of URLs processed
     total: number; // Total number of URLs
   };
-  result?: any; // Store the final result from Firecrawl API
+  result?: unknown; // Use unknown for the result, handle type assertion when used
   error?: string; // Store error message if failed
 }
 
@@ -328,7 +327,7 @@ export function registerBatchHandlers(server: Server) {
         }; // Indicate unhandled or error
       }
 
-      const context = `check_batch_status`;
+      // const context = `check_batch_status`; // context 変数は未使用のためコメントアウト
       safeLog("info", `Handling request for ${name}`);
 
       if (!isStatusCheckOptions(args)) {
