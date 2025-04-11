@@ -3,7 +3,6 @@ import FirecrawlApp, {
   type ExtractParams,
   type ExtractResponse,
   type GenerateLLMsTextParams,
-  type SearchResult,
 } from "@mendable/firecrawl-js";
 import { z } from "zod";
 
@@ -158,7 +157,8 @@ export function registerSearchTools(
         // Format the results
         const results = response.data
           .map(
-            (result: SearchResult) => `URL: ${result.url}
+            // 型アノテーションを削除して型推論に任せる
+            (result) => `URL: ${result.url || "No URL"}
 Title: ${result.title || "No title"}
 Description: ${result.description || "No description"}
 ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
@@ -265,39 +265,45 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
     }
   );
 
-// --- firecrawl_deep_research ---
-// Research phases enum for progress tracking
-enum ResearchPhase {
-  SEARCH = "Search Phase",
-  DATA_COLLECTION = "Data Collection Phase",
-  ANALYSIS = "AI Analysis Phase",
-  REPORT = "Report Generation Phase",
-  COMPLETED = "Completion Phase",
-  POST_PROCESSING = "Post Processing Phase"
-}
+  // --- firecrawl_deep_research ---
+  // Research phases enum for progress tracking
+  enum ResearchPhase {
+    SEARCH = "Search Phase",
+    DATA_COLLECTION = "Data Collection Phase",
+    ANALYSIS = "AI Analysis Phase",
+    REPORT = "Report Generation Phase",
+    COMPLETED = "Completion Phase",
+    POST_PROCESSING = "Post Processing Phase",
+  }
 
-// Progress detail interface for detailed status updates
-interface ProgressDetail {
-  phase: ResearchPhase;
-  progress: number;  // Progress percentage (0-100)
-  message: string;
-  timestamp?: string; // タイムスタンプを追加
-}
+  // Progress detail interface for detailed status updates
+  interface ProgressDetail {
+    phase: ResearchPhase;
+    progress: number; // Progress percentage (0-100)
+    message: string;
+    timestamp?: string; // タイムスタンプを追加
+  }
 
-const DEEP_RESEARCH_TOOL_SCHEMA = {
+  const DEEP_RESEARCH_TOOL_SCHEMA = {
     query: z.string().describe("The query to research"),
     maxDepth: z
       .number()
       .optional()
-      .describe("Maximum depth of research iterations (1-10). Lower values (2-3) are recommended for faster results and to avoid timeouts. Higher values provide more comprehensive research but significantly increase processing time."),
+      .describe(
+        "Maximum depth of research iterations (1-10). Lower values (2-3) are recommended for faster results and to avoid timeouts. Higher values provide more comprehensive research but significantly increase processing time."
+      ),
     timeLimit: z
       .number()
       .optional()
-      .describe("Time limit in seconds for the entire process including search, data collection, and AI analysis. Recommended: 600-900 seconds (10-15 minutes) for general queries. For complex topics, consider 1200-1800 seconds (20-30 minutes). Note that even after 'Research activity completed' message appears, additional processing time is needed. Default: 600"),
+      .describe(
+        "Time limit in seconds for the entire process including search, data collection, and AI analysis. Recommended: 600-900 seconds (10-15 minutes) for general queries. For complex topics, consider 1200-1800 seconds (20-30 minutes). Note that even after 'Research activity completed' message appears, additional processing time is needed. Default: 600"
+      ),
     maxUrls: z
       .number()
       .optional()
-      .describe("Maximum number of URLs to analyze (1-1000). Recommended: 10-30 for quick research, 30-50 for comprehensive research. Values above 50 may lead to timeouts. Higher values require significantly longer processing time, especially during post-completion processing."),
+      .describe(
+        "Maximum number of URLs to analyze (1-1000). Recommended: 10-30 for quick research, 30-50 for comprehensive research. Values above 50 may lead to timeouts. Higher values require significantly longer processing time, especially during post-completion processing."
+      ),
   };
 
   server.tool(
@@ -306,9 +312,12 @@ const DEEP_RESEARCH_TOOL_SCHEMA = {
     DEEP_RESEARCH_TOOL_SCHEMA,
     async (args: DeepResearchArgs) => {
       const { query, ...options } = args;
-      console.log(`Starting deep research for query: "${query}" with options:`, options);
+      console.log(
+        `Starting deep research for query: "${query}" with options:`,
+        options
+      );
       const startTime = Date.now();
-      
+
       try {
         // client.deepResearch might not exist or have different signature
         // Assuming it exists and matches the schema for now
@@ -328,18 +337,25 @@ const DEEP_RESEARCH_TOOL_SCHEMA = {
             let phase = ResearchPhase.SEARCH;
             let isPhaseStart = false;
             let isPhaseComplete = false;
-            
+
             // フェーズの開始を検出
-            if (activity.message.includes("starting") || activity.message.includes("begin")) {
+            if (
+              activity.message.includes("starting") ||
+              activity.message.includes("begin")
+            ) {
               isPhaseStart = true;
             }
-            
+
             // フェーズの完了を検出
-            if (activity.message.includes("completed") || activity.message.includes("finished") || 
-                activity.message.includes("done") || (activity.progress && activity.progress >= 100)) {
+            if (
+              activity.message.includes("completed") ||
+              activity.message.includes("finished") ||
+              activity.message.includes("done") ||
+              (activity.progress && activity.progress >= 100)
+            ) {
               isPhaseComplete = true;
             }
-            
+
             // 特定のフェーズを検出
             if (activity.message.includes("collecting")) {
               phase = ResearchPhase.DATA_COLLECTION;
@@ -348,12 +364,18 @@ const DEEP_RESEARCH_TOOL_SCHEMA = {
             } else if (activity.message.includes("generating")) {
               phase = ResearchPhase.REPORT;
             }
-            
+
             // "Research activity completed"メッセージを検出
-            if (activity.message.includes("completed") && !activity.message.includes("collecting") && 
-                !activity.message.includes("analyzing") && !activity.message.includes("generating")) {
+            if (
+              activity.message.includes("completed") &&
+              !activity.message.includes("collecting") &&
+              !activity.message.includes("analyzing") &&
+              !activity.message.includes("generating")
+            ) {
               phase = ResearchPhase.COMPLETED;
-              console.log(`[${timestamp}] IMPORTANT: Research activity marked as completed, but post-processing is still ongoing. This may take additional time.`);
+              console.log(
+                `[${timestamp}] IMPORTANT: Research activity marked as completed, but post-processing is still ongoing. This may take additional time.`
+              );
             }
 
             // Create progress detail
@@ -361,25 +383,35 @@ const DEEP_RESEARCH_TOOL_SCHEMA = {
               phase,
               progress: activity.progress || 0,
               message: `${phase}: ${activity.message}`,
-              timestamp
+              timestamp,
             };
 
             // フェーズの開始または完了時に詳細なログを出力
             if (isPhaseStart) {
-              console.log(`[${timestamp}] PHASE START: ${phase} has started. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+              console.log(
+                `[${timestamp}] PHASE START: ${phase} has started. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+              );
             }
-            
+
             if (isPhaseComplete) {
-              console.log(`[${timestamp}] PHASE COMPLETE: ${phase} has completed. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+              console.log(
+                `[${timestamp}] PHASE COMPLETE: ${phase} has completed. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+              );
             }
-            
+
             // 通常の進捗ログ
-            console.log(`[${timestamp}] Research progress: ${JSON.stringify(progress)}`);
-            
+            console.log(
+              `[${timestamp}] Research progress: ${JSON.stringify(progress)}`
+            );
+
             // 完了フェーズの場合、追加の情報を提供
             if (phase === ResearchPhase.COMPLETED) {
-              console.log(`[${timestamp}] POST-COMPLETION: Now processing final results. This may take several minutes depending on the amount of data collected.`);
-              console.log(`[${timestamp}] POST-COMPLETION: Total elapsed time so far: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+              console.log(
+                `[${timestamp}] POST-COMPLETION: Now processing final results. This may take several minutes depending on the amount of data collected.`
+              );
+              console.log(
+                `[${timestamp}] POST-COMPLETION: Total elapsed time so far: ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+              );
             }
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -388,25 +420,33 @@ const DEEP_RESEARCH_TOOL_SCHEMA = {
             console.log(`[${timestamp}] Research source: ${source.url}`);
           }
         );
-        
+
         // 最終的な完了ログ
         const endTime = Date.now();
         const totalTime = ((endTime - startTime) / 1000).toFixed(1);
-        console.log(`[${new Date().toISOString()}] FINAL COMPLETION: Deep research process fully completed. Total time: ${totalTime}s`);
+        console.log(
+          `[${new Date().toISOString()}] FINAL COMPLETION: Deep research process fully completed. Total time: ${totalTime}s`
+        );
 
         if (!response.success) {
           throw new Error(response.error || "Deep research failed");
         }
 
-        console.log(`[${new Date().toISOString()}] POST_PROCESSING: Formatting response data`);
+        console.log(
+          `[${new Date().toISOString()}] POST_PROCESSING: Formatting response data`
+        );
         const formattedResponse = {
           finalAnalysis: response.data.finalAnalysis,
           // activities: response.data.activities, // Include if needed
           // sources: response.data.sources, // Include if needed
         };
-        console.log(`[${new Date().toISOString()}] POST_PROCESSING: Response formatting complete`);
+        console.log(
+          `[${new Date().toISOString()}] POST_PROCESSING: Response formatting complete`
+        );
 
-        console.log(`[${new Date().toISOString()}] COMPLETE: Returning final research results to client`);
+        console.log(
+          `[${new Date().toISOString()}] COMPLETE: Returning final research results to client`
+        );
         return {
           content: [
             {
