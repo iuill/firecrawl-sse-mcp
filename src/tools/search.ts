@@ -1,11 +1,53 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import FirecrawlApp, {
-  // type SearchOptions, // Not exported from firecrawl-js
   type ExtractParams,
   type ExtractResponse,
   type GenerateLLMsTextParams,
+  type SearchResult,
 } from "@mendable/firecrawl-js";
 import { z } from "zod";
+
+// Define base types for tool arguments
+interface SearchArgs {
+  query: string;
+  limit?: number;
+  lang?: string;
+  country?: string;
+  tbs?: string;
+  filter?: string;
+  location?: {
+    country?: string;
+    languages?: string[];
+  };
+  scrapeOptions?: {
+    formats?: Array<"markdown" | "html" | "rawHtml">;
+    onlyMainContent?: boolean;
+    waitFor?: number;
+  };
+}
+
+interface ExtractArgs {
+  urls: string[];
+  prompt?: string;
+  systemPrompt?: string;
+  schema?: Record<string, unknown>;
+  allowExternalLinks?: boolean;
+  enableWebSearch?: boolean;
+  includeSubdomains?: boolean;
+}
+
+interface DeepResearchArgs {
+  query: string;
+  maxDepth?: number;
+  timeLimit?: number;
+  maxUrls?: number;
+}
+
+interface GenerateLLMsTextArgs {
+  url: string;
+  maxUrls?: number;
+  showFullText?: boolean;
+}
 
 // Deep Researchの型定義（firecrawl-jsに存在しない場合、必要に応じて定義）
 interface DeepResearchParams {
@@ -97,7 +139,7 @@ export function registerSearchTools(
     "firecrawl_search",
     "Search and retrieve content from web pages with optional scraping. Returns SERP results by default (url, title, description) or full page content when scrapeOptions are provided.",
     SEARCH_TOOL_SCHEMA,
-    async (args) => {
+    async (args: SearchArgs) => {
       const { query, ...options } = args;
       try {
         const response = await client.search(query, {
@@ -116,7 +158,7 @@ export function registerSearchTools(
         // Format the results
         const results = response.data
           .map(
-            (result) => `URL: ${result.url}
+            (result: SearchResult) => `URL: ${result.url}
 Title: ${result.title || "No title"}
 Description: ${result.description || "No description"}
 ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
@@ -171,7 +213,7 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
     "firecrawl_extract",
     "Extract structured information from web pages using LLM. Supports both cloud AI and self-hosted LLM extraction.",
     EXTRACT_TOOL_SCHEMA,
-    async (args) => {
+    async (args: ExtractArgs) => {
       const { urls, ...options } = args;
       try {
         // Log if using self-hosted instance if needed
@@ -223,26 +265,50 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
     }
   );
 
-  // --- firecrawl_deep_research ---
-  const DEEP_RESEARCH_TOOL_SCHEMA = {
+// --- firecrawl_deep_research ---
+// Research phases enum for progress tracking
+enum ResearchPhase {
+  SEARCH = "Search Phase",
+  DATA_COLLECTION = "Data Collection Phase",
+  ANALYSIS = "AI Analysis Phase",
+  REPORT = "Report Generation Phase",
+  COMPLETED = "Completion Phase",
+  POST_PROCESSING = "Post Processing Phase"
+}
+
+// Progress detail interface for detailed status updates
+interface ProgressDetail {
+  phase: ResearchPhase;
+  progress: number;  // Progress percentage (0-100)
+  message: string;
+  timestamp?: string; // タイムスタンプを追加
+}
+
+const DEEP_RESEARCH_TOOL_SCHEMA = {
     query: z.string().describe("The query to research"),
     maxDepth: z
       .number()
       .optional()
-      .describe("Maximum depth of research iterations (1-10)"),
-    timeLimit: z.number().optional().describe("Time limit in seconds (30-300)"),
+      .describe("Maximum depth of research iterations (1-10). Lower values (2-3) are recommended for faster results and to avoid timeouts. Higher values provide more comprehensive research but significantly increase processing time."),
+    timeLimit: z
+      .number()
+      .optional()
+      .describe("Time limit in seconds for the entire process including search, data collection, and AI analysis. Recommended: 600-900 seconds (10-15 minutes) for general queries. For complex topics, consider 1200-1800 seconds (20-30 minutes). Note that even after 'Research activity completed' message appears, additional processing time is needed. Default: 600"),
     maxUrls: z
       .number()
       .optional()
-      .describe("Maximum number of URLs to analyze (1-1000)"),
+      .describe("Maximum number of URLs to analyze (1-1000). Recommended: 10-30 for quick research, 30-50 for comprehensive research. Values above 50 may lead to timeouts. Higher values require significantly longer processing time, especially during post-completion processing."),
   };
 
   server.tool(
     "firecrawl_deep_research",
     "Conduct deep research on a query using web crawling, search, and AI analysis.",
     DEEP_RESEARCH_TOOL_SCHEMA,
-    async (args) => {
+    async (args: DeepResearchArgs) => {
       const { query, ...options } = args;
+      console.log(`Starting deep research for query: "${query}" with options:`, options);
+      const startTime = Date.now();
+      
       try {
         // client.deepResearch might not exist or have different signature
         // Assuming it exists and matches the schema for now
@@ -256,26 +322,91 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
             // origin: "mcp-server", // Remove origin if not supported
           } as DeepResearchParams, // Cast options
           // Add callbacks if supported by the actual method
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (activity: any) => {
-            console.log(`Research activity: ${activity.message}`);
+            const timestamp = new Date().toISOString();
+            // Determine the current phase based on activity message
+            let phase = ResearchPhase.SEARCH;
+            let isPhaseStart = false;
+            let isPhaseComplete = false;
+            
+            // フェーズの開始を検出
+            if (activity.message.includes("starting") || activity.message.includes("begin")) {
+              isPhaseStart = true;
+            }
+            
+            // フェーズの完了を検出
+            if (activity.message.includes("completed") || activity.message.includes("finished") || 
+                activity.message.includes("done") || (activity.progress && activity.progress >= 100)) {
+              isPhaseComplete = true;
+            }
+            
+            // 特定のフェーズを検出
+            if (activity.message.includes("collecting")) {
+              phase = ResearchPhase.DATA_COLLECTION;
+            } else if (activity.message.includes("analyzing")) {
+              phase = ResearchPhase.ANALYSIS;
+            } else if (activity.message.includes("generating")) {
+              phase = ResearchPhase.REPORT;
+            }
+            
+            // "Research activity completed"メッセージを検出
+            if (activity.message.includes("completed") && !activity.message.includes("collecting") && 
+                !activity.message.includes("analyzing") && !activity.message.includes("generating")) {
+              phase = ResearchPhase.COMPLETED;
+              console.log(`[${timestamp}] IMPORTANT: Research activity marked as completed, but post-processing is still ongoing. This may take additional time.`);
+            }
+
+            // Create progress detail
+            const progress: ProgressDetail = {
+              phase,
+              progress: activity.progress || 0,
+              message: `${phase}: ${activity.message}`,
+              timestamp
+            };
+
+            // フェーズの開始または完了時に詳細なログを出力
+            if (isPhaseStart) {
+              console.log(`[${timestamp}] PHASE START: ${phase} has started. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+            }
+            
+            if (isPhaseComplete) {
+              console.log(`[${timestamp}] PHASE COMPLETE: ${phase} has completed. Elapsed time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+            }
+            
+            // 通常の進捗ログ
+            console.log(`[${timestamp}] Research progress: ${JSON.stringify(progress)}`);
+            
+            // 完了フェーズの場合、追加の情報を提供
+            if (phase === ResearchPhase.COMPLETED) {
+              console.log(`[${timestamp}] POST-COMPLETION: Now processing final results. This may take several minutes depending on the amount of data collected.`);
+              console.log(`[${timestamp}] POST-COMPLETION: Total elapsed time so far: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+            }
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (source: any) => {
-            console.log(`Research source: ${source.url}`);
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] Research source: ${source.url}`);
           }
         );
+        
+        // 最終的な完了ログ
+        const endTime = Date.now();
+        const totalTime = ((endTime - startTime) / 1000).toFixed(1);
+        console.log(`[${new Date().toISOString()}] FINAL COMPLETION: Deep research process fully completed. Total time: ${totalTime}s`);
 
         if (!response.success) {
           throw new Error(response.error || "Deep research failed");
         }
 
+        console.log(`[${new Date().toISOString()}] POST_PROCESSING: Formatting response data`);
         const formattedResponse = {
           finalAnalysis: response.data.finalAnalysis,
           // activities: response.data.activities, // Include if needed
           // sources: response.data.sources, // Include if needed
         };
+        console.log(`[${new Date().toISOString()}] POST_PROCESSING: Response formatting complete`);
 
+        console.log(`[${new Date().toISOString()}] COMPLETE: Returning final research results to client`);
         return {
           content: [
             {
@@ -328,7 +459,7 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
     "firecrawl_generate_llmstxt",
     "Generate standardized LLMs.txt file for a given URL, which provides context about how LLMs should interact with the website.",
     GENERATE_LLMSTXT_TOOL_SCHEMA,
-    async (args) => {
+    async (args: GenerateLLMsTextArgs) => {
       const { url, ...params } = args;
       try {
         // client.generateLLMsText might not exist or have different signature
