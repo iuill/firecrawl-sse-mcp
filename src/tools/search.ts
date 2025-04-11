@@ -428,25 +428,105 @@ ${result.markdown ? `\nContent:\n${result.markdown}` : ""}`
           `[${new Date().toISOString()}] FINAL COMPLETION: Deep research process fully completed. Total time: ${totalTime}s`
         );
 
+        // レスポンスデータの詳細ログ
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Received raw response from deepResearch API`
+        );
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Response success status: ${response.success}`
+        );
+
+        // レスポンスデータの構造と大きさを確認
+        const responseDataKeys = Object.keys(response.data || {});
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Response data keys: ${JSON.stringify(responseDataKeys)}`
+        );
+
+        // finalAnalysisの存在確認とサイズ確認
+        const hasFinalAnalysis =
+          response.data && "finalAnalysis" in response.data;
+        const finalAnalysisSize = hasFinalAnalysis
+          ? Buffer.from(String(response.data.finalAnalysis)).length
+          : 0;
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Final analysis exists: ${hasFinalAnalysis}, Size: ${finalAnalysisSize} bytes`
+        );
+
         if (!response.success) {
+          console.log(
+            `[${new Date().toISOString()}] RESPONSE_ERROR: Research failed with error: ${response.error || "Unknown error"}`
+          );
           throw new Error(response.error || "Deep research failed");
         }
 
         console.log(
           `[${new Date().toISOString()}] POST_PROCESSING: Formatting response data`
         );
+
+        // データ整形前の詳細ログ
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Starting to format final analysis data`
+        );
+
         const formattedResponse = {
           finalAnalysis: response.data.finalAnalysis,
           // activities: response.data.activities, // Include if needed
           // sources: response.data.sources, // Include if needed
         };
+
+        // データ整形後の詳細ログ
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Formatted response object created`
+        );
+
+        // 整形されたデータのサイズを確認
+        const formattedResponseSize = Buffer.from(
+          JSON.stringify(formattedResponse)
+        ).length;
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Formatted response size: ${formattedResponseSize} bytes`
+        );
+
         console.log(
           `[${new Date().toISOString()}] POST_PROCESSING: Response formatting complete`
+        );
+
+        // 最終レスポンスオブジェクトのサイズを確認
+        const finalResponseSize = Buffer.from(
+          JSON.stringify({
+            content: [
+              {
+                type: "text",
+                text: formattedResponse.finalAnalysis,
+              },
+            ],
+            isError: false,
+          })
+        ).length;
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Final response object size: ${finalResponseSize} bytes`
+        );
+
+        // 送信直前の詳細ログ
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: About to send response to client. Response type: object, isError: false`
         );
 
         console.log(
           `[${new Date().toISOString()}] COMPLETE: Returning final research results to client`
         );
+
+        // 送信試行ログ
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Attempting to send response to client...`
+        );
+
+        // 送信完了ログ（returnの直前に配置）
+        console.log(
+          `[${new Date().toISOString()}] RESPONSE_DEBUG: Executing return statement`
+        );
+
+        // 直接オブジェクトを返す
         return {
           content: [
             {
