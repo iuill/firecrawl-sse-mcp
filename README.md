@@ -14,7 +14,8 @@
 ## 前提条件
 
 - Node.js 18.0.0以上
-- Docker (コンテナ化して実行する場合)
+- Docker
+- Docker Compose (Docker Desktop には通常含まれています)
 - Firecrawl APIキー (https://firecrawl.dev/ から取得可能)
 
 ## セットアップ
@@ -47,27 +48,46 @@ npm run build
 npm start
 ```
 
-### Docker を使用した実行
+### Docker Compose を使用した実行 (推奨)
 
-リポジトリに含まれる便利なスクリプトを使用して、Dockerコンテナとしてサーバーを実行できます:
+`docker-compose.yml` ファイルを使用して、簡単にコンテナを管理できます。
 
 ```bash
-# スクリプトに実行権限を付与
+# コンテナのビルドとバックグラウンドでの起動
+docker-compose up -d --build
+
+# ログの表示 (-f で追跡)
+docker-compose logs -f
+
+# コンテナの停止
+docker-compose down
+
+# コンテナの停止とボリュームの削除 (注意: データが失われます)
+# docker-compose down -v
+```
+
+### Docker スクリプトを使用した実行 (代替)
+
+リポジトリに含まれる便利なスクリプトを使用して、Dockerコンテナとしてサーバーを実行することも可能です:
+
+```bash
+# スクリプトに実行権限を付与 (初回のみ)
 chmod +x scripts/firecrawl-mcp.sh
 
 # Dockerイメージのビルド
 ./scripts/firecrawl-mcp.sh build
 
-# コンテナの起動
+# コンテナの起動 (デフォルトポート: 3006)
 ./scripts/firecrawl-mcp.sh start
+# ポートを指定して起動する場合: ./scripts/firecrawl-mcp.sh start -P <ポート番号>
 
 # ログの表示
 ./scripts/firecrawl-mcp.sh logs
 
-# コンテナの停止
+# コンテナの停止と削除
 ./scripts/firecrawl-mcp.sh stop
 
-# コンテナとイメージの削除
+# コンテナとイメージの削除 (確認あり)
 ./scripts/firecrawl-mcp.sh delete
 ```
 
@@ -112,9 +132,12 @@ Firecrawl MCPサーバーをRoo Code（Cline）に接続するには、以下の
 まず、上記の手順に従ってFirecrawl MCPサーバーを起動します：
 
 ```bash
-# Dockerを使用する場合
-./scripts/firecrawl-mcp.sh build
-./scripts/firecrawl-mcp.sh start
+# Docker Composeを使用する場合 (推奨)
+docker-compose up -d --build
+
+# またはスクリプトを使用する場合
+# ./scripts/firecrawl-mcp.sh build
+# ./scripts/firecrawl-mcp.sh start
 
 # または直接実行する場合
 npm install

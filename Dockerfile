@@ -48,7 +48,7 @@ COPY --chown=appuser:appgroup --from=build /app/dist ./dist
 USER appuser
 
 # アプリケーションポートを公開（デフォルトは3000、PORT環境変数で上書き可能）
-EXPOSE ${PORT:-3004}
+EXPOSE ${FIRECRAWL_PORT:-3006}
 
 # アプリケーションを実行するコマンドを定義
 # npm start よりも node を直接使用する方が若干効率的
